@@ -4,18 +4,21 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-  "start": "node index.js",
-  "dev": "nodemon index.js"
-},
-
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "worker": "node workers/withdrawalWorker.js"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
     "bcryptjs": "^3.0.3",
+    "bullmq": "^6.3.14",
     "express": "^5.3.0",
+    "ioredis": "^6.0.0",
     "jsonwebtoken": "^9.0.3",
+    "pino": "^10.4.0",
     "zod": "^4.6.5"
   },
   "devDependencies": {
