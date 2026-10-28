@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#102a2a">
+    <title>KaasuPay — Your money, in motion</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <main id="auth-view" class="auth-shell">
+      <section class="auth-aside">
+        <a class="brand brand-light" href="/" aria-label="KaasuPay home">
+          <span class="brand-mark">K</span><span>Kaasu<span class="brand-accent">Pay</span></span>
+        </a>
+        <div class="auth-promise">
+          <span class="eyebrow eyebrow-light">MONEY, MADE SIMPLE</span>
+          <h1>Small steps.<br>Big <span>possibilities.</span></h1>
+          <p>A clearer way to move, manage, and grow your money — all in one place.</p>
+        </div>
+        <div class="aside-foot"><span class="status-dot"></span> Your personal finance space</div>
+        <div class="decor decor-one"></div><div class="decor decor-two"></div>
+      </section>
+
+      <section class="auth-main">
+        <div class="auth-card">
+          <div class="auth-tabs" role="tablist" aria-label="Account access">
+            <button class="auth-tab active" id="signin-tab" type="button" role="tab" aria-selected="true">Sign in</button>
+            <button class="auth-tab" id="signup-tab" type="button" role="tab" aria-selected="false">Create account</button>
+          </div>
+          <div class="auth-heading">
+            <span class="eyebrow">WELCOME TO KAASUPAY</span>
+            <h2 id="auth-title">Good to see you again.</h2>
+            <p id="auth-subtitle">Sign in to pick up where you left off.</p>
+          </div>
+          <div id="auth-message" class="notice" role="status" hidden></div>
+          <form id="auth-form" novalidate>
+            <div id="name-fields" class="name-fields" hidden>
+              <label>First name<input name="firstName" autocomplete="given-name" maxlength="50"></label>
+              <label>Last name<input name="lastName" autocomplete="family-name" maxlength="50"></label>
+            </div>
+            <label>Email address<input name="username" type="email" autocomplete="email" placeholder="you@example.com" required></label>
+            <label>Password<input name="password" type="password" autocomplete="current-password" minlength="6" placeholder="At least 6 characters" required></label>
+            <button id="auth-submit" class="button button-primary button-wide" type="submit">
+              <span>Sign in</span><span aria-hidden="true">↗</span>
+            </button>
+          </form>
+          <p class="fine-print">By continuing, you agree to use this internship demo responsibly. Payments are test mode only.</p>
+        </div>
+      </section>
+    </main>
+
+    <div id="app-view" class="app-shell" hidden>
+      <aside class="sidebar">
+        <a class="brand" href="/" aria-label="KaasuPay home"><span class="brand-mark">K</span><span>Kaasu<span class="brand-accent">Pay</span></span></a>
+        <div class="sidebar-label">YOUR SPACE</div>
+        <nav class="side-nav" aria-label="Main navigation">
+          <a class="nav-link active" href="#overview"><span class="nav-icon">⌂</span>Overview</a>
+          <a class="nav-link" href="#activity"><span class="nav-icon">↗</span>Activity</a>
+          <a class="nav-link" href="#withdraw"><span class="nav-icon">⇥</span>Withdraw</a>
+        </nav>
+        <div class="sidebar-bottom">
+          <div class="help-card"><span class="help-icon">✳</span><strong>Here for your next move</strong><p>Use test details for checkout and bank scenarios.</p></div>
+          <button id="signout-button" class="nav-link signout-button" type="button"><span class="nav-icon">↪</span>Sign out</button>
+        </div>
+      </aside>
+
+      <main class="main-content">
+        <header class="topbar">
+          <div class="mobile-brand"><a class="brand" href="/"><span class="brand-mark">K</span><span>Kaasu<span class="brand-accent">Pay</span></span></a></div>
+          <div class="topbar-caption"><span class="eyebrow">YOUR MONEY, AT A GLANCE</span><span class="topbar-date" id="today-date"></span></div>
+          <div class="profile-chip"><span id="avatar" class="avatar">K</span><span><strong id="profile-name">Welcome</strong><small id="profile-email"></small></span></div>
+        </header>
+
+        <div id="app-notice" class="notice app-notice" role="status" hidden></div>
+
+        <section id="overview" class="welcome-row">
+          <div><span class="eyebrow">YOUR KAASUPAY WALLET</span><h1>Welcome back, <span id="welcome-name">there</span>.</h1><p>Here's what's happening with your wallet today.</p></div>
+          <button id="refresh-button" class="icon-button" type="button" aria-label="Refresh wallet data" title="Refresh">↻</button>
+        </section>
+
+        <section class="overview-grid" aria-label="Wallet overview">
+          <article class="balance-card">
+            <div class="balance-card-top"><span>AVAILABLE BALANCE</span><span class="balance-status"><i></i> Wallet active</span></div>
+            <div id="wallet-balance" class="balance-amount">₹—</div>
+            <div class="balance-card-bottom"><span>Balance shown in Indian rupees</span><span id="balance-updated">Live from your wallet</span></div>
+            <div class="balance-orb"></div>
+          </article>
+          <article class="quick-card">
+            <div class="quick-card-heading"><span class="quick-icon add-icon">＋</span><span class="eyebrow">ADD MONEY</span></div>
+            <h2>Top up your wallet</h2><p>Secure checkout powered by Razorpay test mode.</p>
+            <a class="button button-dark button-wide" href="/add-money.html">Add money <span aria-hidden="true">↗</span></a>
+          </article>
+        </section>
+
+        <section class="content-grid">
+          <article id="activity" class="panel activity-panel">
+            <div class="panel-heading"><div><span class="eyebrow">YOUR WALLET</span><h2>Recent activity</h2></div><button id="activity-refresh" class="text-button" type="button">Refresh <span>↻</span></button></div>
+            <div id="activity-list" class="activity-list"><div class="empty-state"><span class="loader"></span><p>Loading your activity…</p></div></div>
+            <div id="activity-pagination" class="pagination" hidden></div>
+          </article>
+
+          <aside class="panel withdraw-panel" id="withdraw">
+            <div class="panel-heading"><div><span class="eyebrow">MOVE MONEY OUT</span><h2>Withdraw</h2></div><span class="withdraw-icon">⇥</span></div>
+            <p class="panel-intro">Request a payout to your saved bank account. Your balance is reserved while it processes. Use fake details only; never enter a real bank account.</p>
+            <form id="bank-form" class="compact-form">
+              <h3>Bank accounts</h3>
+              <label>Account holder<input name="accountHolderName" autocomplete="name" placeholder="Name on account" required minlength="2" maxlength="100"></label>
+              <label>Account number<input name="accountNumber" inputmode="numeric" autocomplete="off" placeholder="9–18 digits" pattern="[0-9]{9,18}" required></label>
+              <label>IFSC code<input name="ifsc" autocapitalize="characters" autocomplete="off" placeholder="e.g. HDFC0001234" pattern="[A-Za-z]{4}0[A-Za-z0-9]{6}" required></label>
+              <label>Fake bank scenario
+                <select name="testScenario">
+                  <option value="SUCCESS">Success</option>
+                  <option value="TEMPORARY_FAILURE">Temporary retry, then success</option>
+                  <option value="TIMEOUT">Timeout, then confirm</option>
+                  <option value="CLOSED_ACCOUNT">Closed account (refund)</option>
+                </select>
+              </label>
+              <button id="bank-submit" class="button button-outline button-wide" type="submit">Save bank account</button>
+            </form>
+            <form id="withdraw-form" class="compact-form withdraw-form">
+              <h3>New withdrawal</h3>
+              <label>Send to<select name="bankAccountId" id="bank-select" required><option value="">Loading accounts…</option></select></label>
+              <label>Amount (₹)<input name="amount" type="number" min="0.01" step="0.01" placeholder="0.00" required></label>
+              <button id="withdraw-submit" class="button button-primary button-wide" type="submit"><span>Request withdrawal</span><span aria-hidden="true">↗</span></button>
+              <p class="form-hint">Requests are asynchronous. Check activity for status updates.</p>
+            </form>
+            <div class="withdrawal-history">
+              <div class="history-subheading"><h3>Withdrawal requests</h3><button id="withdrawal-refresh" class="text-button" type="button">Refresh <span>↻</span></button></div>
+              <div id="withdrawal-list" class="withdrawal-list"><div class="empty-state"><p>Loading withdrawal requests…</p></div></div>
+            </div>
+          </aside>
+        </section>
+        <footer class="app-footer"><span>KAASUPAY INTERNSHIP DEMO</span><span><i class="status-dot"></i> Test environment · No real bank payouts</span></footer>
+      </main>
+    </div>
+    <script src="/app.js" defer></script>
+  </body>
+</html>

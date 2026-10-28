@@ -1,6 +1,7 @@
 
+const { timingSafeEqual } = require("crypto");
 const jwt = require("jsonwebtoken");
-const { JWT_SECRET } = require("./config");
+const { JWT_SECRET, STAFF_KEY } = require("./config");
 
 function authMiddleware(req, res, next) {
   const authorization = req.headers.authorization;
@@ -31,4 +32,32 @@ function authMiddleware(req, res, next) {
   }
 }
 
-module.exports = { authMiddleware };
+function staffKeyMiddleware(req, res, next) {
+  if (!STAFF_KEY) {
+    return res.status(503).json({
+      error: "Staff operations are not configured.",
+    });
+  }
+
+  const suppliedKey = req.get("x-staff-key");
+  if (!suppliedKey) {
+    return res.status(401).json({
+      error: "A valid staff key is required.",
+    });
+  }
+
+  const suppliedBuffer = Buffer.from(suppliedKey);
+  const configuredBuffer = Buffer.from(STAFF_KEY);
+  if (
+    suppliedBuffer.length !== configuredBuffer.length ||
+    !timingSafeEqual(suppliedBuffer, configuredBuffer)
+  ) {
+    return res.status(403).json({
+      error: "Staff authorization failed.",
+    });
+  }
+
+  next();
+}
+
+module.exports = { authMiddleware, staffKeyMiddleware };

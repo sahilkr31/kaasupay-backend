@@ -6,7 +6,10 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "worker": "node workers/withdrawalWorker.js"
+    "worker": "node workers/withdrawalWorker.js",
+    "razorpay:signature": "node tools/generate-checkout-signature.js",
+    "razorpay:webhook:test": "node tools/send-test-razorpay-webhook.js",
+    "fake-bank": "node tools/fake-bank.js"
   },
   "keywords": [],
   "author": "",
@@ -21,6 +24,7 @@
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.11.2",
     "pino": "^10.4.0",
+    "razorpay": "^2.9.8",
     "zod": "^4.6.5"
   },
   "devDependencies": {
