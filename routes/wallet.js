@@ -7,7 +7,7 @@ const { PaymentOrder, Transaction, Wallet } = require("../db");
 const {
   getRazorpayConfiguration,
 } = require("../config");
-const { authMiddleware, staffKeyMiddleware } = require("../middleware");
+const { authMiddleware, staffKeyMiddleware } = require("../auth");
 const {
   WalletServiceError,
   creditTopUp,

@@ -125,7 +125,7 @@ router.post("/signin", async (req, res) => {
 });
 
 
-router.get("/me", require("../middleware").authMiddleware, async (req, res) => {
+router.get("/me", require("../auth").authMiddleware, async (req, res) => {
   const user = await User.findById(req.userId)
     .select("-passwordHash");
 

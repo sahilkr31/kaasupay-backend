@@ -4,7 +4,7 @@ const express = require("express");
 const { z } = require("zod");
 const logger = require("../logger");
 const { BankAccount } = require("../db");
-const { authMiddleware } = require("../middleware");
+const { authMiddleware } = require("../auth");
 const { withdrawalQueue } = require("../queues/withdrawalQueue");
 const { WalletServiceError } = require("../services/walletService");
 const {

@@ -1,7 +1,7 @@
 const express = require("express");
 const { z } = require("zod");
 const { Withdrawal } = require("../db");
-const { authMiddleware, staffKeyMiddleware } = require("../middleware");
+const { authMiddleware, staffKeyMiddleware } = require("../auth");
 
 const router = express.Router();
 
