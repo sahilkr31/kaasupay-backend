@@ -1,7 +1,9 @@
 require("dotenv").config();
 const express = require("express");
+const path = require("path");
 const { randomUUID } = require("crypto");
 const apiRoutes = require("./routes");
+const razorpayWebhookRoutes = require("./routes/razorpayWebhook");
 const logger = require("./logger");
 const { connectDB } = require("./db");
 
@@ -68,7 +70,13 @@ if (durationSamples.length > MAX_DURATION_SAMPLES) {
   next();
 });
 
-// Parse incoming JSON request bodies
+// Verify the Razorpay signature over the untouched request bytes.
+app.use("/api/v1/webhooks", razorpayWebhookRoutes);
+
+// Serve the simple Razorpay Checkout test page.
+app.use(express.static(path.join(__dirname, "public")));
+
+// Parse JSON for the remaining API routes.
 app.use(express.json());
 
 // Mount API routes

@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>KaasuPay - Add Money (Test Mode)</title>
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+    <style>
+      * { box-sizing: border-box; }
+      body { margin: 0; min-height: 100vh; padding: 2rem 1rem; background: #f5f8f6; color: #172828; font: 15px/1.5 "DM Sans", system-ui, sans-serif; }
+      main { max-width: 32rem; margin: 2rem auto; padding: clamp(1.25rem, 5vw, 2.25rem); border: 1px solid #e8edeb; border-radius: 18px; background: #fff; box-shadow: 0 16px 45px rgba(29, 57, 48, .07); }
+      .back-link { color: #53744b; font-size: .85rem; font-weight: 700; text-decoration: none; }
+      h1 { margin: 1.25rem 0 .4rem; font-size: clamp(1.6rem, 6vw, 2rem); letter-spacing: -.05em; }
+      p { color: #758181; }
+      .test-note { padding: .75rem; border-radius: 9px; background: #f1f7ed; color: #47653c; font-size: .85rem; }
+      label { display: block; margin-top: 1rem; color: #354543; font-size: .85rem; font-weight: 700; }
+      input, button { box-sizing: border-box; font: inherit; margin-top: .4rem; padding: .75rem; width: 100%; border: 1px solid #dfe7e3; border-radius: 9px; }
+      input:focus { outline: 2px solid #bddc9c; border-color: #7d9e8d; }
+      button { margin-top: 1.25rem; border: 0; background: #bde96d; color: #1d382c; cursor: pointer; font-weight: 700; }
+      button:disabled { cursor: wait; opacity: .7; }
+      #message { min-height: 1.5rem; white-space: pre-wrap; font-size: .9rem; }
+    </style>
+  </head>
+  <body>
+    <main>
+    <a class="back-link" href="/">← Back to dashboard</a>
+    <h1>Add money to your wallet</h1>
+    <p class="test-note">Razorpay test mode only. Use test credentials and test payment details; no real payments.</p>
+    <form id="add-money-form">
+      <label for="token">Bearer token</label>
+      <input id="token" name="token" type="password" autocomplete="off" required>
+      <label for="amount">Amount (INR)</label>
+      <input id="amount" name="amount" type="number" min="10" max="10000" step="0.01" value="10.00" required>
+      <button type="submit">Continue to Razorpay Checkout</button>
+    </form>
+    <p id="message" role="status"></p>
+    </main>
+
+    <script>
+      const form = document.getElementById("add-money-form");
+      const message = document.getElementById("message");
+      const tokenField = document.getElementById("token");
+      const submitButton = form.querySelector('button[type="submit"]');
+      const sessionToken = sessionStorage.getItem("kaasupay_demo_token");
+
+      if (sessionToken) {
+        tokenField.value = sessionToken;
+        tokenField.required = false;
+        tokenField.parentElement.hidden = true;
+      } else {
+        tokenField.required = true;
+      }
+
+      function setLoading(label, loading) {
+        submitButton.disabled = loading;
+        submitButton.textContent = loading ? label : "Continue to Razorpay Checkout";
+      }
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        message.textContent = "";
+
+        const token = document.getElementById("token").value.trim();
+        const rupees = Number(document.getElementById("amount").value);
+        const amount = Math.round(rupees * 100);
+        if (!Number.isFinite(rupees) || !Number.isInteger(rupees * 100) ||
+            amount < 1000 || amount > 1000000) {
+          message.textContent = "Enter an amount from ₹10.00 to ₹10,000.00 with at most two decimal places.";
+          return;
+        }
+
+        try {
+          setLoading("Creating secure order…", true);
+          const orderResponse = await fetch("/api/v1/wallet/add-money/order", {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${token}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ amount })
+          });
+          const order = await orderResponse.json();
+          if (!orderResponse.ok) {
+            throw new Error(order.error || "Could not create the payment order.");
+          }
+
+          const checkout = new Razorpay({
+            key: order.keyId,
+            order_id: order.orderId,
+            amount: order.amount,
+            currency: order.currency,
+            name: "KaasuPay",
+            description: "Wallet top-up (test mode)",
+            handler: async (result) => {
+              setLoading("Verifying payment…", true);
+              try {
+                const verifyResponse = await fetch("/api/v1/wallet/add-money/verify", {
+                  method: "POST",
+                  headers: {
+                    "Authorization": `Bearer ${token}`,
+                    "Content-Type": "application/json"
+                  },
+                  body: JSON.stringify(result)
+                });
+                const verification = await verifyResponse.json();
+                if (!verifyResponse.ok) {
+                  throw new Error(verification.error || "Payment verification failed.");
+                }
+                message.textContent = verification.replayed
+                  ? "This payment was already added to your wallet."
+                  : "Payment captured and wallet credited successfully.";
+              } catch (error) {
+                message.textContent = error.message || "Payment verification failed. Check your wallet before retrying.";
+              } finally {
+                setLoading("", false);
+              }
+            },
+            modal: {
+              ondismiss: () => {
+                message.textContent = "Checkout closed. Your wallet has not been credited.";
+                setLoading("", false);
+              }
+            }
+          });
+          checkout.on("payment.failed", (failure) => {
+            message.textContent = failure.error?.description || "Payment failed. Your wallet was not credited.";
+            setLoading("", false);
+          });
+          setLoading("Complete checkout in Razorpay…", true);
+          checkout.open();
+        } catch (error) {
+          message.textContent = error.message || "Unable to start checkout.";
+          setLoading("", false);
+        }
+      });
+    </script>
+  </body>
+</html>
