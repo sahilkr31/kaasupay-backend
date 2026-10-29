@@ -1,9 +1,10 @@
 
 const { timingSafeEqual } = require("crypto");
 const jwt = require("jsonwebtoken");
+const { User } = require("./db");
 const { JWT_SECRET, STAFF_KEY } = require("./config");
 
-function authMiddleware(req, res, next) {
+async function authMiddleware(req, res, next) {
   const authorization = req.headers.authorization;
 
   if (!authorization || !authorization.startsWith("Bearer ")) {
@@ -14,22 +15,32 @@ function authMiddleware(req, res, next) {
 
   const token = authorization.slice(7);
 
+  let decoded;
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-
-    if (!decoded.userId) {
-      return res.status(401).json({
-        error: "Your session is invalid or has expired. Please sign in again.",
-      });
-    }
-
-    req.userId = decoded.userId;
-    next();
+    decoded = jwt.verify(token, JWT_SECRET);
   } catch (error) {
     return res.status(401).json({
       error: "Your session is invalid or has expired. Please sign in again.",
     });
   }
+
+  if (!decoded.userId) {
+    return res.status(401).json({
+      error: "Your session is invalid or has expired. Please sign in again.",
+    });
+  }
+
+  const user = await User.findById(decoded.userId)
+    .select("tokenVersion")
+    .lean();
+  if (!user || decoded.tv !== (user.tokenVersion || 0)) {
+    return res.status(401).json({
+      message: "Session ended. Please sign in again",
+    });
+  }
+
+  req.userId = decoded.userId;
+  return next();
 }
 
 function staffKeyMiddleware(req, res, next) {
@@ -39,7 +50,7 @@ function staffKeyMiddleware(req, res, next) {
     });
   }
 
-  const suppliedKey = req.get("x-staff-key");
+  const suppliedKey = req.get("x-staff-key") || req.get("x-admin-key");
   if (!suppliedKey) {
     return res.status(401).json({
       error: "A valid staff key is required.",

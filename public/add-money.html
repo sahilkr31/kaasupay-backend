@@ -43,12 +43,12 @@
       const submitButton = form.querySelector('button[type="submit"]');
       const sessionToken = sessionStorage.getItem("kaasupay_demo_token");
 
-      if (sessionToken) {
-        tokenField.value = sessionToken;
-        tokenField.required = false;
-        tokenField.parentElement.hidden = true;
+            if (sessionToken) {
+         tokenField.value = sessionToken;
+         tokenField.required = false;
+         tokenField.parentElement.hidden = true;
       } else {
-        tokenField.required = true;
+         tokenField.required = true;
       }
 
       function setLoading(label, loading) {

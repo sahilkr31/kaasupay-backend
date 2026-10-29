@@ -7,6 +7,9 @@ const { BankAccount } = require("../db");
 const { authMiddleware } = require("../auth");
 const { withdrawalQueue } = require("../queues/withdrawalQueue");
 const { WalletServiceError } = require("../services/walletService");
+const { DAY6_RATE_LIMITS } = require("../config");
+const { rateLimit } = require("../middleware/rateLimit");
+const { checkPin, sendDay6Error } = require("../services/day6Service");
 const {
   createWithdrawal,
   ensureWithdrawalIndexes,
@@ -31,6 +34,11 @@ const bankAccountSchema = z.object({
 const withdrawalSchema = z.object({
   bankAccountId: z.string().regex(/^[a-f\d]{24}$/i),
   amount: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  pin: z.string().regex(/^\d{4}(?:\d{2})?$/),
+});
+const moneyRateLimit = rateLimit({
+  ...DAY6_RATE_LIMITS.money,
+  keyFrom: (req) => req.userId,
 });
 
 const paginationSchema = z.object({
@@ -124,7 +132,7 @@ router.get("/bank-accounts", authMiddleware, async (req, res) => {
   });
 });
 
-router.post("/withdrawals", authMiddleware, async (req, res) => {
+router.post("/withdrawals", authMiddleware, moneyRateLimit, async (req, res) => {
   const parsed = withdrawalSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({
@@ -141,6 +149,7 @@ router.post("/withdrawals", authMiddleware, async (req, res) => {
 
   const bankAccountId = parsed.data.bankAccountId.toLowerCase();
   try {
+    await checkPin(req.userId, parsed.data.pin);
     const result = await createWithdrawal({
       userId: req.userId,
       bankAccountId,
@@ -215,6 +224,9 @@ router.post("/withdrawals", authMiddleware, async (req, res) => {
       },
     });
   } catch (error) {
+    if (sendDay6Error(res, error)) {
+      return;
+    }
     if (sendWithdrawalError(res, error)) {
       return;
     }
@@ -254,48 +266,10 @@ router.get("/withdrawals/:id", authMiddleware, async (req, res) => {
   });
 });
 
-// Submit a withdrawal job to the queue
-router.post("/withdraw", async (req, res) => {
-  const { amount } = req.body;
-
-  logger.info(
-    { requestId: req.id },
-    "Withdrawal request received"
-  );
-
-  try {
-    const job = await withdrawalQueue.add("process-withdrawal", {
-      requestId: req.id,
-      amount
-    });
-
-    logger.info(
-      {
-        requestId: req.id,
-        jobId: job.id
-      },
-      "Withdrawal job added to queue"
-    );
-
-    return res.status(202).json({
-      message: "Withdrawal queued for processing",
-      requestId: req.id,
-      jobId: job.id
-    });
-  } catch (error) {
-    logger.error(
-      {
-        requestId: req.id,
-        err: error.message
-      },
-      "Failed to queue withdrawal"
-    );
-
-    return res.status(500).json({
-      message: "Failed to queue withdrawal",
-      requestId: req.id
-    });
-  }
+router.post("/withdraw", (_req, res) => {
+  return res.status(410).json({
+    error: "This withdrawal endpoint is retired. Use POST /api/v1/wallet/withdrawals.",
+  });
 });
 
 module.exports = router;

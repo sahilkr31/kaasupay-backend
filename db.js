@@ -1,6 +1,7 @@
 
 const mongoose = require("mongoose");
-const { MONGO_URL } = require("./config");
+const { MONGO_URL, assertRequiredConfig } = require("./config");
+let connectionPromise;
 
 const userSchema = new mongoose.Schema(
   {
@@ -26,6 +27,28 @@ const userSchema = new mongoose.Schema(
     passwordHash: {
       type: String,
       required: true,
+    },
+    pinHash: {
+      type: String,
+      default: null,
+      select: false,
+    },
+    pinFailedCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 3,
+      validate: Number.isInteger,
+    },
+    pinLockedUntil: {
+      type: Date,
+      default: null,
+    },
+    tokenVersion: {
+      type: Number,
+      default: 0,
+      min: 0,
+      validate: Number.isInteger,
     },
   },
   { timestamps: true }
@@ -416,6 +439,52 @@ const outboxEventSchema = new mongoose.Schema(
 outboxEventSchema.index({ status: 1, nextAttemptAt: 1 });
 outboxEventSchema.index({ status: 1, lockUntil: 1 });
 
+const dailySpendSchema = new mongoose.Schema(
+  {
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    day: {
+      type: String,
+      required: true,
+      match: /^\d{4}-\d{2}-\d{2}$/,
+    },
+    spent: {
+      type: Number,
+      required: true,
+      default: 0,
+      min: 0,
+      validate: Number.isSafeInteger,
+    },
+  },
+  { timestamps: true }
+);
+dailySpendSchema.index({ userId: 1, day: 1 }, { unique: true });
+
+const rateLimitCounterSchema = new mongoose.Schema(
+  {
+    key: {
+      type: String,
+      required: true,
+      unique: true,
+    },
+    count: {
+      type: Number,
+      required: true,
+      min: 0,
+      validate: Number.isInteger,
+    },
+    expiresAt: {
+      type: Date,
+      required: true,
+    },
+  },
+  { timestamps: true }
+);
+rateLimitCounterSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+
 const User = mongoose.model("User", userSchema);
 const Wallet = mongoose.model("Wallet", walletSchema);
 const Transaction = mongoose.model("Transaction", transactionSchema);
@@ -424,10 +493,34 @@ const PaymentOrder = mongoose.model("PaymentOrder", paymentOrderSchema);
 const BankAccount = mongoose.model("BankAccount", bankAccountSchema);
 const Withdrawal = mongoose.model("Withdrawal", withdrawalSchema);
 const OutboxEvent = mongoose.model("OutboxEvent", outboxEventSchema);
+const DailySpend = mongoose.model("DailySpend", dailySpendSchema);
+const RateLimitCounter = mongoose.model("RateLimitCounter", rateLimitCounterSchema);
 
 async function connectDB() {
-  await mongoose.connect(MONGO_URL);
-  console.log("Connected to MongoDB");
+  assertRequiredConfig();
+
+  if (mongoose.connection.readyState === 1) {
+    return mongoose.connection;
+  }
+
+  if (mongoose.connection.readyState === 0) {
+    connectionPromise = undefined;
+  }
+
+  if (!connectionPromise) {
+    connectionPromise = mongoose
+      .connect(MONGO_URL)
+      .then((connection) => {
+        console.log("Connected to MongoDB");
+        return connection;
+      })
+      .catch((error) => {
+        connectionPromise = undefined;
+        throw error;
+      });
+  }
+
+  return connectionPromise;
 }
 
 module.exports = {
@@ -440,4 +533,6 @@ module.exports = {
   BankAccount,
   Withdrawal,
   OutboxEvent,
+  DailySpend,
+  RateLimitCounter,
 };

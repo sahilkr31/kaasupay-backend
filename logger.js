@@ -10,11 +10,15 @@ const logger = pino({
   redact: {
     paths: [
       "password",
+      "pin",
+      "pinHash",
       "token",
       "otp",
       "req.headers.authorization",
       "req.headers.cookie",
       "*.password",
+      "*.pin",
+      "*.pinHash",
       "*.token",
       "*.otp"
     ],

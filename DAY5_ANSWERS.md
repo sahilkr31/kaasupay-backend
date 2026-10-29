@@ -33,7 +33,7 @@ npm run worker
 npm run fake-bank
 ```
 
-The existing unauthenticated `POST /api/v1/wallet/withdraw` endpoint remains a logging-only BullMQ failure demonstration. It does not reserve funds. The persisted, authenticated withdrawal API is the plural `POST /api/v1/wallet/withdrawals`.
+The legacy `POST /api/v1/wallet/withdraw` endpoint is retired and returns `410 Gone` without queuing work. The persisted, authenticated withdrawal API is `POST /api/v1/wallet/withdrawals`; it requires a payment PIN and uses the shared transfer/withdrawal rate limit and daily spending limit.
 
 Staff can inspect unresolved requests at `GET /api/v1/admin/withdrawals?status=NEEDS_REVIEW` using a signed-in account and the configured `x-staff-key`. The response contains masked account details only.
 

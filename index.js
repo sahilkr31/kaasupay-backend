@@ -10,9 +10,13 @@ const { connectDB } = require("./db");
 const app = express();
 const PORT = 3000;
 
+if (process.env.VERCEL === "1") {
+  app.set("trust proxy", 1);
+}
+
 // Generate a unique ID for every incoming request
 app.use((req, res, next) => {
-  req.id = randomUUID();
+  req.id = req.id || randomUUID();
   res.setHeader("X-Request-ID", req.id);
   next();
 });
@@ -118,7 +122,7 @@ app.get("/monitoring/latency", (req, res) => {
   res.status(200).json(getLatencyStats());
 });
 
-// Connect to MongoDB before starting the server
+// Connect to MongoDB before starting the local server
 async function startServer() {
   try {
     await connectDB();
@@ -132,4 +136,8 @@ async function startServer() {
   }
 }
 
-startServer();
+if (require.main === module) {
+  startServer();
+}
+
+module.exports = app;

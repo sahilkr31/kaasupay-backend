@@ -5,12 +5,23 @@ const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID;
 const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET;
 const RAZORPAY_WEBHOOK_SECRET = process.env.RAZORPAY_WEBHOOK_SECRET;
 const BANK_URL = process.env.BANK_URL || "http://localhost:4000";
+const DAILY_SPENDING_LIMIT_PAISE = 1000000;
+const DAY6_RATE_LIMITS = Object.freeze({
+  signinEmail: { name: "signin-email", max: 5, windowSeconds: 60 },
+  signinIp: { name: "signin-ip", max: 20, windowSeconds: 60 },
+  signupIp: { name: "signup-ip", max: 10, windowSeconds: 3600 },
+  pinSetup: { name: "pin-setup", max: 5, windowSeconds: 3600 },
+  money: { name: "money", max: 10, windowSeconds: 60 },
+});
 
-if (!MONGO_URL || !JWT_SECRET) {
-  console.error(
-    "MONGO_URL and JWT_SECRET must be set in your .env file"
-  );
-  process.exit(1);
+function assertRequiredConfig() {
+  const missing = [];
+  if (!MONGO_URL) missing.push("MONGO_URL");
+  if (!JWT_SECRET) missing.push("JWT_SECRET");
+
+  if (missing.length) {
+    throw new Error(`Missing required configuration: ${missing.join(", ")}`);
+  }
 }
 
 function getRazorpayConfiguration(required = [
@@ -69,6 +80,9 @@ module.exports = {
   RAZORPAY_KEY_SECRET,
   RAZORPAY_WEBHOOK_SECRET,
   BANK_URL,
+  DAILY_SPENDING_LIMIT_PAISE,
+  DAY6_RATE_LIMITS,
+  assertRequiredConfig,
   getRazorpayConfiguration,
   getLocalBankUrl,
 };
