@@ -1,7 +1,8 @@
 const express = require("express");
 const { z } = require("zod");
-const { Withdrawal } = require("../db");
-const { authMiddleware, staffKeyMiddleware } = require("../middleware");
+const { User, Withdrawal } = require("../db");
+const { authMiddleware, staffKeyMiddleware } = require("../auth");
+const { getWalletReconciliation } = require("../services/walletService");
 
 const router = express.Router();
 
@@ -69,5 +70,37 @@ router.get(
     });
   }
 );
+
+router.post(
+  "/users/:id/unlock-pin",
+  authMiddleware,
+  staffKeyMiddleware,
+  async (req, res) => {
+    if (!/^[a-f\d]{24}$/i.test(req.params.id)) {
+      return res.status(400).json({ message: "Invalid user ID" });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      req.params.id,
+      { $set: { pinFailedCount: 0, pinLockedUntil: null } },
+      { new: false }
+    ).select("_id");
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    return res.status(200).json({ message: "PIN unlocked" });
+  }
+);
+
+router.get("/reconcile", authMiddleware, staffKeyMiddleware, async (req, res) => {
+  const reconciliation = await getWalletReconciliation();
+  return res.status(200).json({
+    ...reconciliation,
+    moneyIsConserved: reconciliation.consistent,
+    mismatches: reconciliation.discrepancies,
+  });
+});
 
 module.exports = router;

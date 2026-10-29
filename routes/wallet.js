@@ -3,11 +3,21 @@ const express = require("express");
 const { z } = require("zod");
 const Razorpay = require("razorpay");
 const { randomUUID } = require("crypto");
-const { PaymentOrder, Transaction, Wallet } = require("../db");
+const { PaymentOrder, Transaction, User, Wallet } = require("../db");
 const {
+  DAILY_SPENDING_LIMIT_PAISE,
+  DAY6_RATE_LIMITS,
   getRazorpayConfiguration,
 } = require("../config");
-const { authMiddleware, staffKeyMiddleware } = require("../middleware");
+const { authMiddleware, staffKeyMiddleware } = require("../auth");
+const { rateLimit } = require("../middleware/rateLimit");
+const {
+  checkPin,
+  getDailySpend,
+  indiaDay,
+  nextIndiaMidnight,
+  sendDay6Error,
+} = require("../services/day6Service");
 const {
   WalletServiceError,
   creditTopUp,
@@ -28,6 +38,7 @@ const amountSchema = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 const transferSchema = z.object({
   toUserId: userIdSchema,
   amount: amountSchema,
+  pin: z.string().regex(/^\d{4}(?:\d{2})?$/),
   description: z.string().trim().min(1).max(200).optional(),
 });
 
@@ -50,6 +61,10 @@ const checkoutVerificationSchema = z.object({
   razorpay_order_id: z.string().min(1).max(100),
   razorpay_payment_id: z.string().min(1).max(100),
   razorpay_signature: z.string().regex(/^[a-f\d]{64}$/i),
+});
+const moneyRateLimit = rateLimit({
+  ...DAY6_RATE_LIMITS.money,
+  keyFrom: (req) => req.userId,
 });
 
 function serializeTransaction(transaction, userId) {
@@ -266,7 +281,7 @@ router.get("/add-money/orders/:orderId", authMiddleware, async (req, res) => {
 });
 
 // POST /api/v1/wallet/transfer
-router.post("/transfer", authMiddleware, async (req, res) => {
+router.post("/transfer", authMiddleware, moneyRateLimit, async (req, res) => {
   const parsed = transferSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({
@@ -288,6 +303,26 @@ router.post("/transfer", authMiddleware, async (req, res) => {
     });
   }
 
+  if (!(await User.exists({ _id: toUserId }))) {
+    return res.status(404).json({
+      error: "Recipient user not found.",
+    });
+  }
+  if (!(await Wallet.exists({ userId: toUserId }))) {
+    return res.status(404).json({
+      error: "Recipient wallet not found.",
+    });
+  }
+
+  try {
+    await checkPin(req.userId, parsed.data.pin);
+  } catch (error) {
+    if (sendDay6Error(res, error)) {
+      return;
+    }
+    throw error;
+  }
+
   const description =
     parsed.data.description || `Transfer to ${toUserId}`;
 
@@ -300,16 +335,32 @@ router.post("/transfer", authMiddleware, async (req, res) => {
       description,
     });
 
-    return res.status(result.replayed ? 200 : 201).json({
+    return res.status(200).json({
       transaction: serializeTransaction(result.transaction, req.userId),
       replayed: result.replayed,
     });
   } catch (error) {
+    if (sendDay6Error(res, error)) {
+      return;
+    }
     if (sendWalletError(res, error)) {
       return;
     }
     throw error;
   }
+});
+
+// GET /api/v1/wallet/limits
+router.get("/limits", authMiddleware, async (req, res) => {
+  const now = new Date();
+  const day = indiaDay(now);
+  const usedToday = await getDailySpend(req.userId, day);
+  return res.status(200).json({
+    dailyLimit: DAILY_SPENDING_LIMIT_PAISE,
+    usedToday,
+    leftToday: Math.max(0, DAILY_SPENDING_LIMIT_PAISE - usedToday),
+    resetsAt: nextIndiaMidnight(now).toISOString(),
+  });
 });
 
 // POST /api/v1/wallet/deposit

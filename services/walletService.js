@@ -6,6 +6,11 @@ const {
   User,
   Wallet,
 } = require("../db");
+const {
+  consumeDailySpend,
+  ensureDailySpendCounter,
+  indiaDay,
+} = require("./day6Service");
 
 const MAX_BALANCE = Number.MAX_SAFE_INTEGER;
 let walletIndexesPromise;
@@ -231,6 +236,9 @@ async function transferWallet({
     return getIdempotentResult(previous, request);
   }
 
+  const spendDay = indiaDay();
+  await ensureDailySpendCounter(fromUserId, spendDay);
+
   try {
     return await withMongoTransaction(async (session) => {
       const existing = await Transaction.findOne({
@@ -251,6 +259,13 @@ async function transferWallet({
       if (!recipientWallet) {
         throw new WalletServiceError("Recipient wallet not found.", 404, "RECIPIENT_WALLET_NOT_FOUND");
       }
+
+      await consumeDailySpend({
+        userId: fromUserId,
+        amount,
+        day: spendDay,
+        session,
+      });
 
       const senderWallet = await Wallet.findOneAndUpdate(
         { userId: fromUserId, balance: { $gte: amount } },
@@ -297,7 +312,7 @@ async function transferWallet({
             toBalanceAfter: updatedRecipientWallet.balance,
           },
         ],
-        { session }
+        { session, ordered: true }
       );
 
       await LedgerEntry.create(
@@ -317,7 +332,7 @@ async function transferWallet({
             balanceAfter: updatedRecipientWallet.balance,
           },
         ],
-        { session }
+        { session, ordered: true }
       );
 
       return { transaction, replayed: false };

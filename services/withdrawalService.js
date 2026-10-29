@@ -11,6 +11,11 @@ const {
   WalletServiceError,
   withMongoTransaction,
 } = require("./walletService");
+const {
+  consumeDailySpend,
+  ensureDailySpendCounter,
+  indiaDay,
+} = require("./day6Service");
 
 const MAX_BALANCE = Number.MAX_SAFE_INTEGER;
 let withdrawalIndexesPromise;
@@ -60,6 +65,9 @@ async function createWithdrawal({
     return assertSameRequest(existing, request);
   }
 
+  const spendDay = indiaDay();
+  await ensureDailySpendCounter(userId, spendDay);
+
   try {
     return await withMongoTransaction(async (session) => {
       const previous = await Withdrawal.findOne({
@@ -81,6 +89,13 @@ async function createWithdrawal({
           "BANK_ACCOUNT_NOT_FOUND"
         );
       }
+
+      await consumeDailySpend({
+        userId,
+        amount,
+        day: spendDay,
+        session,
+      });
 
       const wallet = await Wallet.findOneAndUpdate(
         { userId, balance: { $gte: amount } },
