@@ -6,6 +6,12 @@ const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET;
 const RAZORPAY_WEBHOOK_SECRET = process.env.RAZORPAY_WEBHOOK_SECRET;
 const BANK_URL = process.env.BANK_URL || "http://localhost:4000";
 const DAILY_SPENDING_LIMIT_PAISE = 1000000;
+const MONEY_REQUEST_EXPIRY_DAYS = 7;
+const MONEY_REQUEST_RATE_LIMIT = Object.freeze({
+  name: "money-request-create",
+  max: 20,
+  windowSeconds: 3600,
+});
 const DAY6_RATE_LIMITS = Object.freeze({
   signinEmail: { name: "signin-email", max: 5, windowSeconds: 60 },
   signinIp: { name: "signin-ip", max: 20, windowSeconds: 60 },
@@ -81,6 +87,8 @@ module.exports = {
   RAZORPAY_WEBHOOK_SECRET,
   BANK_URL,
   DAILY_SPENDING_LIMIT_PAISE,
+  MONEY_REQUEST_EXPIRY_DAYS,
+  MONEY_REQUEST_RATE_LIMIT,
   DAY6_RATE_LIMITS,
   assertRequiredConfig,
   getRazorpayConfiguration,

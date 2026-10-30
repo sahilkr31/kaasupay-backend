@@ -8,6 +8,8 @@
     "dev": "nodemon index.js",
     "test:day6": "node --test tests/day6.test.js tests/day6.legacy-withdrawal.test.js",
     "test:day6:integration": "node --test tests/day6.integration.test.js",
+    "test:day7": "node --test tests/day7.test.js",
+    "test:day7:integration": "node --test --test-name-pattern=\"Day 7\" tests/day6.integration.test.js",
     "worker": "node workers/withdrawalWorker.js",
     "razorpay:signature": "node tools/generate-checkout-signature.js",
     "razorpay:webhook:test": "node tools/send-test-razorpay-webhook.js",

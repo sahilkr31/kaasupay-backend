@@ -250,92 +250,15 @@ async function transferWallet({
         return getIdempotentResult(existing, request);
       }
 
-      const recipient = await User.findById(toUserId).session(session);
-      if (!recipient) {
-        throw new WalletServiceError("Recipient user not found.", 404, "RECIPIENT_NOT_FOUND");
-      }
-
-      const recipientWallet = await Wallet.findOne({ userId: toUserId }).session(session);
-      if (!recipientWallet) {
-        throw new WalletServiceError("Recipient wallet not found.", 404, "RECIPIENT_WALLET_NOT_FOUND");
-      }
-
-      await consumeDailySpend({
-        userId: fromUserId,
-        amount,
-        day: spendDay,
+      return transferWalletInTransaction({
         session,
+        fromUserId,
+        toUserId,
+        amount,
+        idempotencyKey,
+        description,
+        spendDay,
       });
-
-      const senderWallet = await Wallet.findOneAndUpdate(
-        { userId: fromUserId, balance: { $gte: amount } },
-        { $inc: { balance: -amount } },
-        { new: true, session }
-      );
-
-      if (!senderWallet) {
-        const walletExists = await Wallet.exists({ userId: fromUserId }).session(session);
-        if (!walletExists) {
-          throw new WalletServiceError("Wallet not found.", 404, "WALLET_NOT_FOUND");
-        }
-
-        throw new WalletServiceError("Insufficient wallet balance.", 409, "INSUFFICIENT_FUNDS");
-      }
-
-      const updatedRecipientWallet = await Wallet.findOneAndUpdate(
-        {
-          userId: toUserId,
-          balance: { $lte: MAX_BALANCE - amount },
-        },
-        { $inc: { balance: amount } },
-        { new: true, session }
-      );
-
-      if (!updatedRecipientWallet) {
-        throw new WalletServiceError(
-          "Recipient wallet balance would exceed the supported maximum.",
-          409,
-          "BALANCE_LIMIT_EXCEEDED"
-        );
-      }
-
-      const [transaction] = await Transaction.create(
-        [
-          {
-            type: "TRANSFER",
-            fromUserId,
-            toUserId,
-            amount,
-            description,
-            idempotencyKey,
-            fromBalanceAfter: senderWallet.balance,
-            toBalanceAfter: updatedRecipientWallet.balance,
-          },
-        ],
-        { session, ordered: true }
-      );
-
-      await LedgerEntry.create(
-        [
-          {
-            transactionId: transaction._id,
-            userId: fromUserId,
-            direction: "DEBIT",
-            amount,
-            balanceAfter: senderWallet.balance,
-          },
-          {
-            transactionId: transaction._id,
-            userId: toUserId,
-            direction: "CREDIT",
-            amount,
-            balanceAfter: updatedRecipientWallet.balance,
-          },
-        ],
-        { session, ordered: true }
-      );
-
-      return { transaction, replayed: false };
     });
   } catch (error) {
     if (error.code === 11000) {
@@ -347,6 +270,105 @@ async function transferWallet({
 
     throw error;
   }
+}
+
+async function transferWalletInTransaction({
+  session,
+  fromUserId,
+  toUserId,
+  amount,
+  idempotencyKey,
+  description,
+  spendDay = indiaDay(),
+  moneyRequestId,
+}) {
+  const recipient = await User.findById(toUserId).session(session);
+  if (!recipient) {
+    throw new WalletServiceError("Recipient user not found.", 404, "RECIPIENT_NOT_FOUND");
+  }
+
+  const recipientWallet = await Wallet.findOne({ userId: toUserId }).session(session);
+  if (!recipientWallet) {
+    throw new WalletServiceError("Recipient wallet not found.", 404, "RECIPIENT_WALLET_NOT_FOUND");
+  }
+
+  await consumeDailySpend({
+    userId: fromUserId,
+    amount,
+    day: spendDay,
+    session,
+  });
+
+  const senderWallet = await Wallet.findOneAndUpdate(
+    { userId: fromUserId, balance: { $gte: amount } },
+    { $inc: { balance: -amount } },
+    { new: true, session }
+  );
+
+  if (!senderWallet) {
+    const walletExists = await Wallet.exists({ userId: fromUserId }).session(session);
+    if (!walletExists) {
+      throw new WalletServiceError("Wallet not found.", 404, "WALLET_NOT_FOUND");
+    }
+
+    throw new WalletServiceError("Insufficient wallet balance.", 409, "INSUFFICIENT_FUNDS");
+  }
+
+  const updatedRecipientWallet = await Wallet.findOneAndUpdate(
+    {
+      userId: toUserId,
+      balance: { $lte: MAX_BALANCE - amount },
+    },
+    { $inc: { balance: amount } },
+    { new: true, session }
+  );
+
+  if (!updatedRecipientWallet) {
+    throw new WalletServiceError(
+      "Recipient wallet balance would exceed the supported maximum.",
+      409,
+      "BALANCE_LIMIT_EXCEEDED"
+    );
+  }
+
+  const transactionData = {
+    type: "TRANSFER",
+    fromUserId,
+    toUserId,
+    amount,
+    description,
+    idempotencyKey,
+    fromBalanceAfter: senderWallet.balance,
+    toBalanceAfter: updatedRecipientWallet.balance,
+  };
+  if (moneyRequestId) transactionData.moneyRequestId = moneyRequestId;
+
+  const [transaction] = await Transaction.create(
+    [transactionData],
+    { session, ordered: true }
+  );
+
+  await LedgerEntry.create(
+    [
+      {
+        transactionId: transaction._id,
+        userId: fromUserId,
+        direction: "DEBIT",
+        amount,
+        balanceAfter: senderWallet.balance,
+      },
+      {
+        transactionId: transaction._id,
+        userId: toUserId,
+        direction: "CREDIT",
+        amount,
+        balanceAfter: updatedRecipientWallet.balance,
+      },
+    ],
+    { session, ordered: true }
+  );
+
+  return { transaction, replayed: false };
 }
 
 async function depositToWallet({ userId, amount, description }) {
@@ -482,7 +504,9 @@ module.exports = {
   WalletServiceError,
   creditTopUp,
   depositToWallet,
+  ensureWalletIndexes,
   getWalletReconciliation,
   transferWallet,
+  transferWalletInTransaction,
   withMongoTransaction,
 };
