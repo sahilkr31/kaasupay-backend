@@ -3,9 +3,9 @@ require("dotenv").config();
 const { randomUUID } = require("crypto");
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
-const { indiaDay } = require("../services/day6Service");
 
 const TEST_DATABASE_NAME = "kaasupay_day6_integration_test";
+const MONEY_RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const TEST_COLLECTIONS = Object.freeze([
   "users",
   "wallets",
@@ -101,6 +101,7 @@ console.log("Day 6 authSource:", testUrl.searchParams.get("authSource"));
     process.env.RAZORPAY_KEY_ID = "disabled-for-day6-integration";
     process.env.RAZORPAY_KEY_SECRET = "disabled-for-day6-integration";
 
+    const { indiaDay } = require("../services/day6Service");
     const mongoose = require("mongoose");
     const app = require("../index");
     const {
@@ -482,15 +483,56 @@ console.log("Day 6 authSource:", testUrl.searchParams.get("authSource"));
     });
 
     await t.test("D6 transfer and withdrawal share one money limit", async () => {
-      await RateLimitCounter.deleteMany({});
       const token = await signin(rateUser);
       await setPin(token);
       await deposit(staffToken, rateUser.id, 10000);
-      const key = `d6-shared-${randomUUID()}`;
-      for (let index = 0; index < 10; index += 1) {
-        const result = await transfer(token, receiver.id, 100, "5829", key);
-        assert.equal(result.response.status, 200);
+
+      const now = Date.now();
+      const currentWindowStart =
+        Math.floor(now / MONEY_RATE_LIMIT_WINDOW_MS) *
+        MONEY_RATE_LIMIT_WINDOW_MS;
+      const elapsedInWindow = now - currentWindowStart;
+      const safeWindowStart =
+        elapsedInWindow <= 1000
+          ? currentWindowStart
+          : currentWindowStart + MONEY_RATE_LIMIT_WINDOW_MS;
+      const delayUntilSafeWindow = safeWindowStart + 1000 - now;
+      if (delayUntilSafeWindow > 0) {
+        await new Promise((resolve) => setTimeout(resolve, delayUntilSafeWindow));
       }
+
+      const testedWindowStart =
+        Math.floor(Date.now() / MONEY_RATE_LIMIT_WINDOW_MS) *
+        MONEY_RATE_LIMIT_WINDOW_MS;
+      await RateLimitCounter.deleteMany({});
+      for (let index = 0; index < 10; index += 1) {
+        assert.equal(
+          Math.floor(Date.now() / MONEY_RATE_LIMIT_WINDOW_MS) *
+            MONEY_RATE_LIMIT_WINDOW_MS,
+          testedWindowStart,
+          "transfer sequence must remain in the same fixed rate-limit window"
+        );
+        const result = await transfer(
+          token,
+          receiver.id,
+          100,
+          "5829",
+          `d6-shared-${index}-${randomUUID()}`
+        );
+        assert.equal(result.response.status, 200);
+        assert.equal(
+          Math.floor(Date.now() / MONEY_RATE_LIMIT_WINDOW_MS) *
+            MONEY_RATE_LIMIT_WINDOW_MS,
+          testedWindowStart,
+          "all transfers must complete in the same fixed rate-limit window"
+        );
+      }
+      assert.equal(
+        Math.floor(Date.now() / MONEY_RATE_LIMIT_WINDOW_MS) *
+          MONEY_RATE_LIMIT_WINDOW_MS,
+        testedWindowStart,
+        "withdrawal must use the transfers' fixed rate-limit window"
+      );
       const blockedWithdrawal = await request("POST", "/api/v1/wallet/withdrawals", {
         token,
         headers: { "Idempotency-Key": `d6-withdrawal-${randomUUID()}` },
@@ -502,15 +544,50 @@ console.log("Day 6 authSource:", testUrl.searchParams.get("authSource"));
       });
       assert.equal(blockedWithdrawal.response.status, 429);
       assert.ok(blockedWithdrawal.response.headers.get("retry-after"));
+      assert.equal(
+        Math.floor(Date.now() / MONEY_RATE_LIMIT_WINDOW_MS) *
+          MONEY_RATE_LIMIT_WINDOW_MS,
+        testedWindowStart,
+        "the blocked withdrawal must complete in the transfers' fixed rate-limit window"
+      );
     });
 
     await t.test("concurrent transfers cannot exceed the daily spend limit", async () => {
       const token = await signin(concurrentSpendUser);
       await setPin(token);
       await deposit(staffToken, concurrentSpendUser.id, 2000000);
+
+      const now = Date.now();
+      const currentWindowStart =
+        Math.floor(now / MONEY_RATE_LIMIT_WINDOW_MS) *
+        MONEY_RATE_LIMIT_WINDOW_MS;
+      const elapsedInWindow = now - currentWindowStart;
+      const safeWindowStart =
+        elapsedInWindow <= 1000
+          ? currentWindowStart
+          : currentWindowStart + MONEY_RATE_LIMIT_WINDOW_MS;
+      const delayUntilSafeWindow = safeWindowStart + 1000 - now;
+      if (delayUntilSafeWindow > 0) {
+        await new Promise((resolve) => setTimeout(resolve, delayUntilSafeWindow));
+      }
+
+      const testedWindowStart =
+        Math.floor(Date.now() / MONEY_RATE_LIMIT_WINDOW_MS) *
+        MONEY_RATE_LIMIT_WINDOW_MS;
+      const assertSameRateLimitWindow = () => {
+        assert.equal(
+          Math.floor(Date.now() / MONEY_RATE_LIMIT_WINDOW_MS) *
+            MONEY_RATE_LIMIT_WINDOW_MS,
+          testedWindowStart,
+          "all concurrent-spend requests must remain in the same fixed rate-limit window"
+        );
+      };
+
       await RateLimitCounter.deleteMany({});
-      const requests = await Promise.all(
-        Array.from({ length: 15 }, (_, index) =>
+      assertSameRateLimitWindow();
+
+      const concurrentRequests = await Promise.all(
+        Array.from({ length: 10 }, (_, index) =>
           transfer(
             token,
             receiver.id,
@@ -520,17 +597,44 @@ console.log("Day 6 authSource:", testUrl.searchParams.get("authSource"));
           )
         )
       );
-      assert.equal(requests.filter((result) => result.response.status === 200).length, 6);
-      assert.equal(requests.filter((result) => result.response.status === 400).length, 4);
-      assert.equal(requests.filter((result) => result.response.status === 429).length, 5);
+      assertSameRateLimitWindow();
+      assert.equal(
+        concurrentRequests.filter((result) => result.response.status === 200).length,
+        6
+      );
+      assert.equal(
+        concurrentRequests.filter((result) => result.response.status === 400).length,
+        4
+      );
       assert.ok(
-        requests
+        concurrentRequests
           .filter((result) => result.response.status === 400)
           .every((result) => result.body.message === "Daily limit reached")
       );
+
+      const rateLimitedRequests = [];
+      for (let index = 10; index < 15; index += 1) {
+        assertSameRateLimitWindow();
+        const result = await transfer(
+          token,
+          receiver.id,
+          150000,
+          "5829",
+          `concurrent-spend-${index}-${randomUUID()}`
+        );
+        assert.equal(result.response.status, 429);
+        rateLimitedRequests.push(result);
+        assertSameRateLimitWindow();
+      }
+      assert.equal(rateLimitedRequests.length, 5);
+
       const limits = await request("GET", "/api/v1/wallet/limits", { token });
       assert.equal(limits.body.usedToday, 900000);
       assert.equal(limits.body.leftToday, 100000);
+      assertSameRateLimitWindow();
+      const finalBalance = await request("GET", "/api/v1/wallet/balance", { token });
+      assert.equal(finalBalance.body.balance, 1100000);
+      assertSameRateLimitWindow();
     });
 
     await t.test("D7 logout-all invalidates every prior token", async () => {
@@ -605,10 +709,14 @@ console.log("Day 6 authSource:", testUrl.searchParams.get("authSource"));
       assert.equal(created.body.message, "Request sent");
       assert.equal(created.body.request.status, "PENDING");
       assert.equal(created.body.request.amount, 50000);
-      assert.equal(
+      const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+      const expiryFromCreationMs =
         new Date(created.body.request.expiresAt).getTime() -
-          new Date(created.body.request.createdAt).getTime(),
-        7 * 24 * 60 * 60 * 1000
+        new Date(created.body.request.createdAt).getTime();
+      assert.ok(
+        expiryFromCreationMs <= sevenDaysMs &&
+          expiryFromCreationMs >= sevenDaysMs - 1000,
+        "request expiry should be seven days from the route timestamp, within 1 second of createdAt"
       );
 
       const incoming = await request("GET", "/api/v1/requests/incoming", {

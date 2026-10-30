@@ -24,8 +24,8 @@ function getPaymentReplay(transaction, {
   description,
 }) {
   if (
-    transaction.moneyRequestId?.toString() !== requestId ||
-    transaction.toUserId?.toString() !== requesterId ||
+    transaction.moneyRequestId?.toString() !== requestId?.toString() ||
+    transaction.toUserId?.toString() !== requesterId?.toString() ||
     transaction.amount !== amount ||
     transaction.description !== description
   ) {

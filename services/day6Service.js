@@ -36,6 +36,7 @@ function sendDay6Error(res, error) {
   res.status(error.statusCode).json({
     message: error.message,
     ...error.details,
+    code: error.code,
   });
 
   return true;
