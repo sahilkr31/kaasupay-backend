@@ -115,6 +115,10 @@ const transactionSchema = new mongoose.Schema(
       trim: true,
       maxlength: 200,
     },
+    moneyRequestId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "MoneyRequest",
+    },
     fromBalanceAfter: {
       type: Number,
       min: 0,
@@ -177,6 +181,7 @@ transactionSchema.index(
 );
 transactionSchema.index({ fromUserId: 1, createdAt: -1 });
 transactionSchema.index({ toUserId: 1, createdAt: -1 });
+transactionSchema.index({ moneyRequestId: 1 }, { unique: true, sparse: true });
 
 const ledgerEntrySchema = new mongoose.Schema(
   {
@@ -485,6 +490,56 @@ const rateLimitCounterSchema = new mongoose.Schema(
 );
 rateLimitCounterSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
+const moneyRequestSchema = new mongoose.Schema(
+  {
+    requesterId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    payerId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    amount: {
+      type: Number,
+      required: true,
+      min: 100,
+      max: 1000000,
+      validate: {
+        validator: Number.isSafeInteger,
+        message: "Request amount must be an integer number of paise",
+      },
+    },
+    note: {
+      type: String,
+      trim: true,
+      maxlength: 100,
+    },
+    status: {
+      type: String,
+      enum: ["PENDING", "PAID", "DECLINED", "CANCELLED", "EXPIRED"],
+      required: true,
+      default: "PENDING",
+    },
+    expiresAt: {
+      type: Date,
+      required: true,
+    },
+    transactionId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Transaction",
+    },
+    decidedAt: Date,
+  },
+  { timestamps: true }
+);
+moneyRequestSchema.index({ payerId: 1, createdAt: -1 });
+moneyRequestSchema.index({ payerId: 1, status: 1, createdAt: -1 });
+moneyRequestSchema.index({ requesterId: 1, createdAt: -1 });
+moneyRequestSchema.index({ requesterId: 1, status: 1, createdAt: -1 });
+
 const User = mongoose.model("User", userSchema);
 const Wallet = mongoose.model("Wallet", walletSchema);
 const Transaction = mongoose.model("Transaction", transactionSchema);
@@ -495,6 +550,7 @@ const Withdrawal = mongoose.model("Withdrawal", withdrawalSchema);
 const OutboxEvent = mongoose.model("OutboxEvent", outboxEventSchema);
 const DailySpend = mongoose.model("DailySpend", dailySpendSchema);
 const RateLimitCounter = mongoose.model("RateLimitCounter", rateLimitCounterSchema);
+const MoneyRequest = mongoose.model("MoneyRequest", moneyRequestSchema);
 
 async function connectDB() {
   assertRequiredConfig();
@@ -535,4 +591,5 @@ module.exports = {
   OutboxEvent,
   DailySpend,
   RateLimitCounter,
+  MoneyRequest,
 };
